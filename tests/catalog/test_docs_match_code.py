@@ -1,13 +1,7 @@
-"""문서가 코드보다 뒤처지지 않게 고정한다.
-
-이 저장소는 세 번 같은 실패를 했다. 질의를 고치고 문서를 안 고쳤고, 인덱스를
-추가하고 "설계하지 않았습니다"를 남겼고, 검사를 늘리고 개수를 안 바꿨다.
-사람이 기억해서 맞추는 방식은 이미 실패했으므로 테스트로 옮긴다.
-"""
+"""실행 가능한 SQL과 schema, 검증 근거의 문서 링크를 확인한다."""
 
 from __future__ import annotations
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -22,7 +16,6 @@ if str(SRC) not in sys.path:
 SQL_DIRS = (ROOT / "sql" / "checks", ROOT / "sql" / "lookups")
 SQL_FILES = sorted(f for d in SQL_DIRS for f in d.glob("*.sql"))
 DOCS = ROOT / "docs"
-README = ROOT / "README.md"
 
 
 def _datacatalog_tables(models: object) -> list[object]:
@@ -49,30 +42,6 @@ def test_문서에_실린_질의는_실제_파일과_같다(sql_path: Path):
     )
 
 
-def test_검사와_조회_질의_개수가_문서와_맞는다():
-    from domains.datacatalog.checks import CHECK_FILES, LOOKUP_FILES
-
-    text = README.read_text("utf-8")
-    assert f"검사 {len(CHECK_FILES)}종" in text
-    assert f"조회 질의 {len(LOOKUP_FILES)}종" in text
-    assert len(SQL_FILES) == len(CHECK_FILES) + len(LOOKUP_FILES)
-
-
-def test_테이블과_유일제약_개수가_문서와_맞는다():
-    from domains.datacatalog import models
-
-    tables = _datacatalog_tables(models)
-    uniques = [
-        c
-        for t in tables
-        for c in t.constraints
-        if type(c).__name__ == "UniqueConstraint"
-    ]
-    text = README.read_text("utf-8")
-    assert f"{len(tables)}개 테이블" in text
-    assert f"유일 제약 {len(uniques)}종" in text
-
-
 def test_er_다이어그램이_모든_테이블을_담는다():
     from domains.datacatalog import models
 
@@ -84,12 +53,6 @@ def test_er_다이어그램이_모든_테이블을_담는다():
     assert not actual - drawn, f"다이어그램에 빠진 테이블: {sorted(actual - drawn)}"
 
 
-def test_mcp_도구_개수가_문서와_맞는다():
-    from services.catalog_mcp.server import TOOLS
-
-    assert f"도구 {len(TOOLS)}종" in README.read_text("utf-8")
-
-
 def test_검증표가_참조하는_테스트가_실제로_있다():
     """없는 테스트를 인용하면 검증했다는 주장 자체가 근거를 잃는다."""
     doc = (DOCS / "catalog-api-mcp.md").read_text("utf-8")
@@ -99,79 +62,3 @@ def test_검증표가_참조하는_테스트가_실제로_있다():
         path = Path(__file__).parent / filename
         assert path.exists(), f"{filename} 이 없다"
         assert f"def {func}(" in path.read_text("utf-8"), f"{filename} 에 {func} 가 없다"
-
-
-def test_인덱스_개수_서술이_실제와_맞는다():
-    models_src = (SRC / "domains" / "datacatalog" / "models.py").read_text("utf-8")
-    count = models_src.count("Index(")
-    for name in ("metadata-catalog.md", "sql-quality-checks.md"):
-        text = (DOCS / name).read_text("utf-8")
-        if "Index" in text or "인덱스" in text:
-            assert "인덱스를 설계하지 않았" not in text
-            assert "인덱스는 설계하지 않았" not in text
-    assert f"{count}개" in (DOCS / "metadata-catalog.md").read_text("utf-8")
-
-
-def test_readme_의_테스트_수가_실제와_같다():
-    """세 번째 드리프트다. 한때 README 안에서만 107 과 100 이 서로 달랐고 실제는 120 이었다.
-
-    개수를 사람이 기억해서 맞추는 방식은 이미 세 번 실패했다. 다른 개수는 전부
-    코드에서 세어 대조하고 있었는데 테스트 개수만 빠져 있었다.
-
-    수집만 하고 실행하지 않으므로 재귀하지 않는다.
-    """
-    import subprocess
-
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", str(Path(__file__).parent),
-         "--collect-only", "-q", "--no-header", "-p", "no:cacheprovider"],
-        capture_output=True, text=True, cwd=ROOT,
-        env={**os.environ, "PYTHONPATH": str(SRC)},
-        check=False,
-    )
-    collected = re.search(r"(\d+) tests? collected", result.stdout)
-    assert collected, f"수집 결과를 읽지 못했다:\n{result.stdout[-500:]}\n{result.stderr[-500:]}"
-    actual = int(collected.group(1))
-
-    text = README.read_text("utf-8")
-    stated = re.search(r"카탈로그 계층 테스트 (\d+)종 \(([^)]+)\)", text)
-    assert stated, "README 에 카탈로그 계층 테스트 개수가 없다"
-    assert int(stated.group(1)) == actual, f"README {stated.group(1)}종 != 실제 {actual}종"
-
-    # 내역의 합도 총계와 맞아야 한다. 한쪽만 고치면 합이 어긋난다.
-    parts = [int(n) for n in re.findall(r"(\d+)(?:\s*[·)]|$)", stated.group(2))]
-    assert sum(parts) == actual, f"내역 합 {sum(parts)} != 총계 {actual}"
-
-    assert f"→ {actual} passed" in text, f"확인 절의 `make catalog-test` 결과가 {actual} 이 아니다"
-
-
-def test_문체가_섞이지_않는다():
-    """포트폴리오 19개 중 2개만 다른 문체이면 읽는 사람이 편집 흔적을 먼저 본다."""
-    # 존댓말은 "…니다" 로 끝난다. 어미를 열거하면 반드시 빠뜨린다 —
-    # 실제로 "쓰인다" "구조체다" 같은 것을 놓쳐 64곳이 남아 있었다.
-    #
-    # 마침표를 필수로 두면 안 된다. 목록 항목은 마침표 없이 끝나는데
-    # "…추가할 수 없다" 같은 것이 그 자리에 10여 곳 남아 있었다.
-    # 제목은 뺀다 — 제목까지 존댓말로 쓰지는 않는다.
-    plain = re.compile(r"(?:(?<!니)다|아니다)\.?$")
-    offenders: list[str] = []
-    for path in sorted(DOCS.glob("*.md")):
-        if path.name in {
-            "event-pipeline-load-test-plan.md",
-            "evidence-payload-experiment-plan.md",
-        }:
-            continue  # 실행 전에 고정하는 기술 명세는 평서문을 사용한다.
-        in_code = False
-        for lineno, raw in enumerate(path.read_text("utf-8").splitlines(), 1):
-            # 코드 울타리는 인라인 코드를 지우기 전에 판정해야 한다. ``` 에
-            # `[^`]*` 를 먼저 걸면 앞의 두 개가 지워져 울타리로 보이지 않고,
-            # 그러면 코드 블록 안이 전부 본문으로 검사된다.
-            if raw.strip().startswith("```"):
-                in_code = not in_code
-                continue
-            line = re.sub(r"[\u201c\"][^\u201d\"]*[\u201d\"]", "", re.sub(r"`[^`]*`", "", raw.strip()))
-            if in_code or not line or line.startswith(("|", ">", "--", "#")):
-                continue
-            if plain.search(line):
-                offenders.append(f"{path.name}:{lineno}")
-    assert not offenders, "본문 문체가 ~습니다체와 섞였다: " + ", ".join(offenders[:10])

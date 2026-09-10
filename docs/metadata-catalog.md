@@ -238,7 +238,7 @@ erDiagram
 | `observed_rows` | `(run_id, asset_id, row_key)` | 재시도 시 관측 행이 복제된다 |
 | `observed_fields` | `(row_id, field_path)` | 필드가 중복된다 |
 
-위 표는 판단이 필요했던 8종입니다. 실제 유일 제약은 **11종**이고 나머지 셋(`data_assets`·`data_sources`·`quality_results`)은 자연키가 그대로 유일 키라 설명할 것이 없습니다. 개수는 [테스트가 코드에서 세어 문서와 대조](../tests/catalog/test_docs_match_code.py)합니다.
+위 표는 판단이 필요했던 8종입니다. 실제 유일 제약은 **11종**이고 나머지 셋(`data_assets`·`data_sources`·`quality_results`)은 자연키가 그대로 유일 키라 설명할 것이 없습니다. 현재 제약은 [모델 정의](../src/domains/datacatalog/models.py)에서 확인할 수 있습니다.
 
 `quality_results.severity`와 `first_seen_dag_run_id`도 컬럼으로 둡니다. 심각도를 저장하지 않으면 [실행 정합성 검사](sql-quality-checks.md#실행-정합성)가 warning까지 위반으로 승격시켜 모든 실행이 붉어집니다. `first_seen_dag_run_id`가 없으면 한 번 발생한 영구 위반이 이후 모든 실행을 오염시킵니다.
 
